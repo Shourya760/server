@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import "./config/env.js";
 import connectDB from "./config/db.js";
+import registerRoutes from "./src/routes/index_routes.js";
 
 
 
@@ -13,7 +14,7 @@ app.use(
   cors(
     {
       origin: [
-        "http://localhost:5173",
+        "http://localhost:3000",
       ],
       credentials: true
     }
@@ -22,9 +23,7 @@ app.use(
 
 connectDB();
 
-app.get("/", (req, res) => {
-  res.send('Boilerplates API Running');
-});
+registerRoutes(app);
 
 const PORT = process.env.PORT || 5000;
 
