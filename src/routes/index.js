@@ -1,4 +1,3 @@
-
 import userRoutes from "./user.routes.js";
 
 const registerRoutes = (app) => {

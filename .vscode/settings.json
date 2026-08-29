@@ -1,0 +1,5 @@
+{
+    "editor.acceptSuggestionOnEnter": "on",
+    "editor.inlineSuggest.edits.showCollapsed": false,
+    "js/ts.suggest.completeFunctionCalls": true
+}

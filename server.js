@@ -2,7 +2,7 @@ import express from "express";
 import cors from "cors";
 import "./config/env.js";
 import connectDB from "./config/db.js";
-import registerRoutes from "./src/routes/index_routes.js";
+import registerRoutes from "./src/routes/index.js";
 
 
 
