@@ -62,17 +62,17 @@ export const register_user = async (req, res) => {
         const user = await UserServices.registerUser(data);
 
         if (user) {
-            try {
-                const email_info = welcomeEmail(user, password);
-                await sendEmail({
-                    to: user.email,
-                    subject: email_info.subject,
-                    text: email_info.text,
-                    html: email_info.html,
-                });
-            } catch (error) {
+            const email_info = welcomeEmail(user, password);
+            sendEmail({
+                to: user.email,
+                subject: email_info.subject,
+                text: email_info.text,
+                html: email_info.html,
+            }).catch((error) => {
                 console.error("Error in Email =>", error.message || error);
-            }
+            });
+
+            console.error("Registred ✅");
 
             return res.status(201).json({
                 success: true,
@@ -81,8 +81,10 @@ export const register_user = async (req, res) => {
                     id: user._id,
                     name: user.name,
                     email: user.email,
+                    password: password,
                 },
             });
+
         }
 
 
@@ -231,28 +233,29 @@ export const update_user = async (req, res) => {
         // Remove password from response
         updated_user.password = undefined;
 
-        if (user) {
+        if (updated_user) {
             try {
                 const emailInfo = updateEmail(updated_user);
-
-                await sendEmail({
+                sendEmail({
                     to: updated_user.email,
                     subject: emailInfo.subject,
                     text: emailInfo.text,
                     html: emailInfo.html,
+                }).catch((error) => {
+                    console.error("Error in Email =>", error.message || error);
                 });
             } catch (error) {
-                console.error("Error in Email =>", error.message || error);
+                console.error("Error generating update email =>", error.message || error);
             }
 
-            return res.status(201).json({
+
+            console.error("Updated  ✅");
+
+
+            return res.status(200).json({
                 success: true,
-                message: "User registered successfully",
-                data: {
-                    id: user._id,
-                    name: user.name,
-                    email: user.email,
-                },
+                message: "User Updated successfully",
+                data: updated_user
             });
         }
 
