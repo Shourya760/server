@@ -16,21 +16,20 @@ const articleSchema = new mongoose.Schema(
         detailsDescription: {
             type: String,
             required: true,
-            trim: true,
         },
         banner: {
             type: String,
             required: false,
-            trim: true,
         },
         createdBy: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "User",
-            required: true
+            required: true,
         },
-        comments: {
-
-        }
+        Comments: [{
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Comment",
+        }]
     },
     { timestamps: true }
 )

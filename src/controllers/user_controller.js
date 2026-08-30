@@ -58,9 +58,11 @@ export const register_user = async (req, res) => {
             profile: profile_url
         };
 
-        // Email Services
+// 
         const user = await UserServices.registerUser(data);
 
+
+        // Email Services
         if (user) {
             const email_info = welcomeEmail(user, password);
             sendEmail({
