@@ -41,7 +41,7 @@ export const register_user = async (req, res) => {
         const encrypted_password = await encryptPassword(password);
 
         // upload profile picture if provided
-        let profile_url = "";
+        let profile_url = null;
         if (req.file) {
             const uploadedFile = await uploadToCloudinary(req.file.buffer);
             profile_url = uploadedFile.secure_url || uploadedFile.url;
@@ -58,7 +58,7 @@ export const register_user = async (req, res) => {
             profile: profile_url
         };
 
-// 
+        // 
         const user = await UserServices.registerUser(data);
 
 
@@ -203,7 +203,7 @@ export const update_user = async (req, res) => {
         }
 
         // upload profile picture if provided
-        let profile_url = "";
+        let profile_url = null;
         if (req.file) {
             const uploadedFile = await uploadToCloudinary(req.file.buffer);
             profile_url = uploadedFile.secure_url || uploadedFile.url;

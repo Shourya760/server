@@ -7,7 +7,21 @@ class ArticleServices {
     }
 
     async getByFields(data) {
-        return await Article.findOne(data);
+        return await Article.findOne(data)
+            .populate('createdBy')
+            .select('-comments')
+    }
+
+    async getMyArticles(userId) {
+        return await Article.find({ createdBy: userId })
+            .select('-comments -createdBy');
+    }
+
+    async updateArticle(filter, data) {
+        return await Article.findOneAndUpdate(
+            filter,
+            data,
+        );
     }
 }
 
