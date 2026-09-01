@@ -15,7 +15,19 @@ class CommentServices {
     async getCommentsByArticleId(article_id) {
         return await Comment.find({
             articleId: article_id
-        }).populate("createdBy", "name email profileImage");
+        }).populate("createdBy", "name email profile");
+    }
+
+    async updateComment(filter, data) {
+        return await Comment.findOneAndUpdate(
+            filter,
+            data,
+            { new: true }
+        );
+    }
+
+    async deleteComment(filter) {
+        return await Comment.findOneAndDelete(filter);
     }
 
 }

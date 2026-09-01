@@ -1,7 +1,7 @@
 import UserServices from "../Services/user.services.js";
 import { encryptPassword, comparePassword } from "../utils/encryptions.js";
 import { generatePassword, generateToken } from "../utils/generation.js";
-import { isValidIndianPhone } from "../utils/validations.js";
+import { isValidIndianPhone, isValidEmail } from "../utils/validations.js";
 import { sendEmail } from "../utils/sendemail.js";
 import { welcomeEmail, updateEmail } from "../emailformats/userEmails.js";
 import { uploadToCloudinary } from "../utils/cloudinaryTask.js";
@@ -18,14 +18,22 @@ export const register_user = async (req, res) => {
             });
         }
 
+        // Email format check
+        if (!isValidEmail(email)) {
+            return res.status(400).json({
+                success: false,
+                message: "INVALID EMAIL FORMAT"
+            });
+        }
+
         // Email check
-        const existing_email = await UserServices.getUserByField("email", email)
+        const existing_email = await UserServices.getUserByField("email", email);
         if (existing_email) {
             return res.status(400).json({
                 success: false,
                 message: "EMAIL ALREADY EXISTS"
             });
-        };
+        }
 
         // Phone check
         const phone_check = isValidIndianPhone(phone);
@@ -34,7 +42,15 @@ export const register_user = async (req, res) => {
                 success: false,
                 message: "PHONE NUMBER IS NOT VALID"
             });
-        };
+        }
+
+        // Gender check
+        if (!["male", "female", "other"].includes(gender.toString().toLowerCase())) {
+            return res.status(400).json({
+                success: false,
+                message: "GENDER MUST BE 'male', 'female', OR 'other'"
+            });
+        }
 
         // Random password generation and encryption
         const password = generatePassword();
@@ -51,7 +67,7 @@ export const register_user = async (req, res) => {
             name,
             email,
             phone,
-            gender,
+            gender: gender.toString().toLowerCase(),
             age,
             dob,
             password: encrypted_password,
@@ -109,6 +125,14 @@ export const login_user = async (req, res) => {
             });
         }
 
+        // Email format check
+        if (!isValidEmail(email)) {
+            return res.status(400).json({
+                success: false,
+                message: "INVALID EMAIL FORMAT"
+            });
+        }
+
         // Email check
         const existing_email = await UserServices.getUserByField("email", email);
         if (!existing_email) {
@@ -137,7 +161,7 @@ export const login_user = async (req, res) => {
 
         return res.status(200).json({
             success: true,
-            message: "LOGIN SUCCESSGULL",
+            message: "LOGIN SUCCESSFUL",
             token: token,
             data: "Welcome " + existing_email.name
         })
@@ -202,22 +226,36 @@ export const update_user = async (req, res) => {
             });
         }
 
-        // upload profile picture if provided
-        let profile_url = null;
-        if (req.file) {
-            const uploadedFile = await uploadToCloudinary(req.file.buffer);
-            profile_url = uploadedFile.secure_url || uploadedFile.url;
+        // Phone check if provided
+        if (phone !== undefined && !isValidIndianPhone(phone)) {
+            return res.status(400).json({
+                success: false,
+                message: "PHONE NUMBER IS NOT VALID"
+            });
+        }
+
+        // Gender check if provided
+        if (gender !== undefined && !["male", "female", "other"].includes(gender.toString().toLowerCase())) {
+            return res.status(400).json({
+                success: false,
+                message: "GENDER MUST BE 'male', 'female', OR 'other'"
+            });
         }
 
         // Data to update
         const data = {
             name,
             phone,
-            gender,
+            gender: gender !== undefined ? gender.toString().toLowerCase() : undefined,
             age,
             dob,
-            profile: profile_url
         };
+
+        // upload profile picture if provided
+        if (req.file) {
+            const uploadedFile = await uploadToCloudinary(req.file.buffer);
+            data.profile = uploadedFile.secure_url || uploadedFile.url;
+        }
 
         // Remove undefined fields
         Object.keys(data).forEach((key) => {
@@ -268,6 +306,7 @@ export const update_user = async (req, res) => {
         });
     }
 };
+
 
 
 

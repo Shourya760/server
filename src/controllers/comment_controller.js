@@ -5,11 +5,10 @@ import userServices from "../Services/user.services.js";
 import sendEmail from "../utils/sendemail.js";
 import { commentEmail } from "../emailformats/commentEmail.js";
 
-
 export const create_comment = async (req, res) => {
     try {
         const user_id = req.curr_user.id;
-        const { article_id } = req.query;
+        const article_id = req.query.article_id || req.query.id;
         const { comment } = req.body;
 
         // Required fields
@@ -20,7 +19,14 @@ export const create_comment = async (req, res) => {
             });
         }
 
-        // Validate Article ID
+        // Validate IDs
+        if (!mongoose.isValidObjectId(user_id)) {
+            return res.status(400).json({
+                success: false,
+                message: "INVALID USER ID"
+            });
+        }
+
         if (!mongoose.isValidObjectId(article_id)) {
             return res.status(400).json({
                 success: false,
@@ -37,9 +43,7 @@ export const create_comment = async (req, res) => {
         }
 
         // Get commenter
-        const commenter = await userServices.getUserByField({
-            _id: user_id
-        });
+        const commenter = await userServices.getUserByField("_id", user_id);
         if (!commenter) {
             return res.status(401).json({
                 success: false,
@@ -105,19 +109,26 @@ export const create_comment = async (req, res) => {
 
         return res.status(500).json({
             success: false,
-            message: "ERROR WHILE CREATING COMMENT"
+            message: "ERROR WHILE CREATING COMMENT => " + error.message
         });
     }
 };
 
-
 export const get_comments = async (req, res) => {
     try {
-        const { article_id } = req.query;
+        const article_id = req.query.article_id || req.query.id;
         if (!article_id) {
             return res.status(400).json({
                 success: false,
                 message: "ARTICLE ID IS REQUIRED"
+            });
+        }
+
+        // Validate Article ID
+        if (!mongoose.isValidObjectId(article_id)) {
+            return res.status(400).json({
+                success: false,
+                message: "INVALID ARTICLE ID"
             });
         }
 
@@ -133,6 +144,133 @@ export const get_comments = async (req, res) => {
         return res.status(500).json({
             success: false,
             message: "ERROR WHILE GETTING COMMENTS => " + error.message
+        });
+    }
+};
+
+export const update_comment = async (req, res) => {
+    try {
+        const user_id = req.curr_user.id;
+        const comment_id = req.query.comment_id || req.query.id;
+        const { comment } = req.body;
+
+        // Check if all fields provided
+        if (!comment_id || !comment?.trim()) {
+            return res.status(400).json({
+                success: false,
+                message: "COMMENT ID AND COMMENT ARE REQUIRED"
+            });
+        }
+
+        // Validate IDs
+        if (!mongoose.isValidObjectId(user_id)) {
+            return res.status(400).json({
+                success: false,
+                message: "INVALID USER ID"
+            });
+        }
+
+        if (!mongoose.isValidObjectId(comment_id)) {
+            return res.status(400).json({
+                success: false,
+                message: "INVALID COMMENT ID"
+            });
+        }
+
+        // Comment length
+        if (comment.trim().length > 1000) {
+            return res.status(400).json({
+                success: false,
+                message: "COMMENT CANNOT EXCEED 1000 CHARACTERS"
+            });
+        }
+
+        // Updating Comment
+        const updated_comment = await commentServices.updateComment(
+            {
+                _id: comment_id,
+                createdBy: user_id
+            },
+            {
+                comment: comment.trim()
+            }
+        );
+        if (!updated_comment) {
+            return res.status(404).json({
+                success: false,
+                message: "COMMENT NOT FOUND OR YOU ARE NOT THE OWNER"
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: "COMMENT UPDATED SUCCESSFULLY ✅",
+            data: updated_comment
+        });
+
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: "ERROR WHILE UPDATING COMMENT => " + error.message
+        });
+    }
+};
+
+export const delete_comment = async (req, res) => {
+    try {
+        const user_id = req.curr_user.id;
+        const comment_id = req.query.comment_id || req.query.id;
+
+        // Checking for field
+        if (!comment_id) {
+            return res.status(400).json({
+                success: false,
+                message: "COMMENT ID IS REQUIRED"
+            });
+        }
+
+        // Validate IDs
+        if (!mongoose.isValidObjectId(user_id)) {
+            return res.status(400).json({
+                success: false,
+                message: "INVALID USER ID"
+            });
+        }
+
+        if (!mongoose.isValidObjectId(comment_id)) {
+            return res.status(400).json({
+                success: false,
+                message: "INVALID COMMENT ID"
+            });
+        }
+
+        // Deleting Comment
+        const deleted_comment = await commentServices.deleteComment({
+            _id: comment_id,
+            createdBy: user_id
+        });
+        if (!deleted_comment) {
+            return res.status(404).json({
+                success: false,
+                message: "COMMENT NOT FOUND OR YOU ARE NOT THE OWNER"
+            });
+        }
+
+        // Remove comment ID from Article
+        await articlesServices.removeCommentFromArticle(
+            deleted_comment.articleId,
+            deleted_comment._id
+        );
+
+        return res.status(200).json({
+            success: true,
+            message: "COMMENT DELETED SUCCESSFULLY ✅"
+        });
+
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: "ERROR WHILE DELETING COMMENT => " + error.message
         });
     }
 };

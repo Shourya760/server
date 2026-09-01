@@ -9,15 +9,23 @@ export const create_article = async (req, res) => {
         const { title, shortDescription, detailsDescription } = req.body;
         const banner = req.file;
 
-        // Check all fiels
+        // Check all fields
         if (!title || !shortDescription || !detailsDescription) {
             return res.status(400).json({
                 success: false,
-                message: "ALL FIELDS REQUIRED "
+                message: "ALL FIELDS REQUIRED"
             });
-        };
+        }
 
-        //  Check title length
+        // Validate User ID
+        if (!mongoose.isValidObjectId(user_id)) {
+            return res.status(400).json({
+                success: false,
+                message: "INVALID USER ID"
+            });
+        }
+
+        // Check title length
         if (title.trim().length < 5 || title.trim().length > 150) {
             return res.status(400).json({
                 success: false,
@@ -37,7 +45,7 @@ export const create_article = async (req, res) => {
             });
         }
 
-        //  Check short description length
+        // Check short description length
         if (shortDescription.trim().length < 10 || shortDescription.trim().length > 500) {
             return res.status(400).json({
                 success: false,
@@ -45,7 +53,7 @@ export const create_article = async (req, res) => {
             });
         }
 
-        //  Check detailed description length
+        // Check detailed description length
         if (detailsDescription.trim().length < 20 || detailsDescription.trim().length > 10000) {
             return res.status(400).json({
                 success: false,
@@ -53,7 +61,7 @@ export const create_article = async (req, res) => {
             });
         }
 
-        // Handling Banner is provided
+        // Handling Banner if provided
         let banner_url = null;
         if (banner) {
             const uploadedFile = await uploadToCloudinary(banner.buffer);
@@ -66,31 +74,47 @@ export const create_article = async (req, res) => {
             detailsDescription: detailsDescription.trim(),
             banner: banner_url,
             createdBy: user_id
-        }
+        };
 
         // Adding to DB
         const response = await articlesServices.createArticle(data);
 
-
-        return res.status(200).json({
+        return res.status(201).json({
             success: true,
             message: "ARTICLE CREATED ✅",
             data: response
-        })
+        });
     } catch (error) {
         return res.status(500).json({
             success: false,
-            message: "ERROR WHILE CREATING ARTICLE =>" + error
+            message: "ERROR WHILE CREATING ARTICLE => " + error.message
         });
     }
-}
+};
 
 export const article_details = async (req, res) => {
     try {
-        const { id } = req.query;
+        const id = req.query.id || req.query.article_id;
+
+        // Check ID presence
+        if (!id) {
+            return res.status(400).json({
+                success: false,
+                message: "ARTICLE ID IS REQUIRED"
+            });
+        }
+
+        // Validate ID
+        if (!mongoose.isValidObjectId(id)) {
+            return res.status(400).json({
+                success: false,
+                message: "INVALID ARTICLE ID"
+            });
+        }
+
         const article_details = await articlesServices.getByFields({ _id: id });
         if (!article_details) {
-            return res.status(400).json({
+            return res.status(404).json({
                 success: false,
                 message: "ARTICLE NOT FOUND !"
             });
@@ -100,43 +124,41 @@ export const article_details = async (req, res) => {
             success: true,
             message: "GOT THE ARTICLE DETAILS ✅",
             data: article_details
-        })
+        });
     } catch (error) {
         return res.status(500).json({
             success: false,
-            message: "ERROR WHILE GETTING  ARTICLE DETAILS =>" + error
+            message: "ERROR WHILE GETTING ARTICLE DETAILS => " + error.message
         });
     }
-}
+};
 
 export const my_articles = async (req, res) => {
     try {
         const user_id = req.curr_user.id;
 
-
-
-        // check for valid id
+        // Validate User ID
         if (!mongoose.isValidObjectId(user_id)) {
             return res.status(400).json({
                 success: false,
-                message: "INVALID ARTICLE ID"
+                message: "INVALID USER ID"
             });
         }
 
         const all_articles = await articlesServices.getMyArticles(user_id);
 
-        if (all_articles.length === 0) {
-            return res.status(400).json({
-                success: false,
-                message: "NO ARTICLES FOUND!"
+        if (!all_articles || all_articles.length === 0) {
+            return res.status(200).json({
+                success: true,
+                message: "NO ARTICLES FOUND",
+                length: 0,
+                data: []
             });
         }
 
         return res.status(200).json({
             success: true,
-            message: all_articles.length
-                ? "GOT ALL YOUR ARTICLES ✅"
-                : "NO ARTICLES FOUND",
+            message: "GOT ALL YOUR ARTICLES ✅",
             length: all_articles.length,
             data: all_articles
         });
@@ -144,38 +166,104 @@ export const my_articles = async (req, res) => {
     } catch (error) {
         return res.status(500).json({
             success: false,
-            message: "ERROR WHILE GETTING  YoUR ARTICLE  =>" + error
+            message: "ERROR WHILE GETTING YOUR ARTICLES => " + error.message
         });
     }
-}
+};
 
 export const update_article = async (req, res) => {
     try {
         const user_id = req.curr_user.id;
-        const { id } = req.query;
+        const article_id = req.query.article_id || req.query.id;
         const { title, shortDescription, detailsDescription } = req.body;
 
+        // Check ID presence
+        if (!article_id) {
+            return res.status(400).json({
+                success: false,
+                message: "ARTICLE ID IS REQUIRED"
+            });
+        }
 
-        // Check if article exists
+        // Validate Article ID
+        if (!mongoose.isValidObjectId(article_id)) {
+            return res.status(400).json({
+                success: false,
+                message: "INVALID ARTICLE ID"
+            });
+        }
+
+        // Check if article exists and belongs to user
         const article = await articlesServices.getByFields({
-            _id: id,
+            _id: article_id,
             createdBy: user_id
         });
         if (!article) {
             return res.status(404).json({
                 success: false,
-                message: "ARTICLE NOT FOUND"
+                message: "ARTICLE NOT FOUND OR YOU ARE NOT THE OWNER"
             });
+        }
+
+        const updateData = {};
+
+        // Check title if provided
+        if (title !== undefined) {
+            if (typeof title !== "string" || title.trim().length < 5 || title.trim().length > 150) {
+                return res.status(400).json({
+                    success: false,
+                    message: "TITLE MUST BE BETWEEN 5 AND 150 CHARACTERS"
+                });
+            }
+
+            // Check duplicate article only if title is changed
+            if (title.trim() !== article.title) {
+                const existingArticle = await articlesServices.getByFields({
+                    title: title.trim(),
+                    createdBy: user_id
+                });
+                if (existingArticle && existingArticle._id.toString() !== article_id.toString()) {
+                    return res.status(409).json({
+                        success: false,
+                        message: "YOU HAVE ALREADY CREATED AN ARTICLE WITH THIS TITLE"
+                    });
+                }
+            }
+            updateData.title = title.trim();
+        }
+
+        // Check short description if provided
+        if (shortDescription !== undefined) {
+            if (typeof shortDescription !== "string" || shortDescription.trim().length < 10 || shortDescription.trim().length > 500) {
+                return res.status(400).json({
+                    success: false,
+                    message: "SHORT DESCRIPTION CANNOT EXCEED 500 CHARACTERS"
+                });
+            }
+            updateData.shortDescription = shortDescription.trim();
+        }
+
+        // Check detailed description if provided
+        if (detailsDescription !== undefined) {
+            if (typeof detailsDescription !== "string" || detailsDescription.trim().length < 20 || detailsDescription.trim().length > 10000) {
+                return res.status(400).json({
+                    success: false,
+                    message: "DETAILS DESCRIPTION MUST BE BETWEEN 20 AND 10000 CHARACTERS"
+                });
+            }
+            updateData.detailsDescription = detailsDescription.trim();
+        }
+
+        // Handle banner upload if provided
+        if (req.file) {
+            const uploadedFile = await uploadToCloudinary(req.file.buffer);
+            updateData.banner = uploadedFile.secure_url || uploadedFile.url;
         }
 
         // Updating Article
         const updatedArticle = await articlesServices.updateArticle(
-            { _id: id, createdBy: user_id },
-            {
-                title: title?.trim(),
-                shortDescription: shortDescription?.trim(),
-                detailsDescription: detailsDescription?.trim()
-            }
+            { _id: article_id, createdBy: user_id },
+            updateData
         );
 
         return res.status(200).json({
@@ -192,32 +280,47 @@ export const update_article = async (req, res) => {
     }
 };
 
-
 export const delete_article = async (req, res) => {
     try {
         const user_id = req.curr_user.id;
-        const { id } = req.query;
+        const article_id = req.query.article_id || req.query.id;
+
+        // Check ID presence
+        if (!article_id) {
+            return res.status(400).json({
+                success: false,
+                message: "ARTICLE ID IS REQUIRED"
+            });
+        }
+
+        // Validate Article ID
+        if (!mongoose.isValidObjectId(article_id)) {
+            return res.status(400).json({
+                success: false,
+                message: "INVALID ARTICLE ID"
+            });
+        }
 
         // Check if Exists
         const article = await articlesServices.getByFields({
-            _id: id,
+            _id: article_id,
             createdBy: user_id
         });
         if (!article) {
             return res.status(404).json({
                 success: false,
-                message: "ARTICLE NOT FOUND"
+                message: "ARTICLE NOT FOUND OR YOU ARE NOT THE OWNER"
             });
         }
 
         // Deleting article from DB
         await articlesServices.deleteArticle({
-            _id: id,
+            _id: article_id,
             createdBy: user_id
         });
 
         // Deleting Comments for the article
-        await commentServices.deleteByArticleId(id);
+        await commentServices.deleteByArticleId(article_id);
 
         return res.status(200).json({
             success: true,

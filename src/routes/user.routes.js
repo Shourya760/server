@@ -11,7 +11,7 @@ const upload = multer({
 });
 
 router.post("/create_user", upload.single("profile"), register_user);
-router.get("/login_user", login_user);
+router.post("/login_user", login_user);
 
 router.get("/get_user", authenticate, get_user);
 router.put("/update_user", upload.single("profile"), authenticate, update_user)
