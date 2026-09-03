@@ -6,6 +6,13 @@ class ArticleServices {
         return await Article.create(data);
     }
 
+    async getArticles(skip, limit) {
+        return await Article.find()
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(limit);
+    }
+
     async getByFields(data) {
         return await Article.findOne(data)
             .populate('createdBy', 'name email profile')

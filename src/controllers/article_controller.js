@@ -334,3 +334,36 @@ export const delete_article = async (req, res) => {
         });
     }
 };
+
+export const get_articles = async (req, res) => {
+    try {
+        const page = Number(req.query.page) || 1;
+        const limit = Number(req.query.limit) || 10;
+
+        const skip = (page - 1) * limit;
+
+        const articles = await articlesServices.getArticles(skip, limit);
+        if (!articles) {
+            return res.status(400).json({
+                success: false,
+                message: " NO ARTICLES FOUND "
+            });
+        }
+        return res.status(200).json({
+            success: true,
+            message: "ARTICLES FETCHED SUCCESSFULLY",
+            pagination: {
+                currentPage: page,
+                limit
+            },
+            length:articles.length,
+            data: articles,
+
+        });
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: "ERROR WHILE GETTING ARTICLES => " + error.message
+        });
+    }
+};
