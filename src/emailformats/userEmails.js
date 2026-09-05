@@ -275,10 +275,6 @@ The Team
     };
 };
 
-
-
-
-
 export const updateEmail = (user) => {
     const successMessage = `
         <table

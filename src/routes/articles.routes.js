@@ -14,9 +14,9 @@ const upload = multer({
 router.get("/get_articles", get_articles);
 router.get("/article_details", article_details);
 
-router.post("/create_article", upload.single("banner"), authenticate, create_article);
+router.post("/create_article", authenticate, upload.single("banner"), create_article);
 router.get("/my_articles", authenticate, my_articles);
-router.put("/update_article", authenticate, update_article);
+router.put("/update_article", authenticate, upload.single("banner"), update_article);
 router.delete("/delete_article", authenticate, delete_article);
 
 export default router;

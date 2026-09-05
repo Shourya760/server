@@ -32,6 +32,10 @@ class ArticleServices {
         );
     }
 
+    async deleteArticle(filter) {
+        return await Article.findOneAndDelete(filter);
+    }
+
     async addCommentToArticle(article_id, comment_id) {
         return await Article.findByIdAndUpdate(article_id,
             {

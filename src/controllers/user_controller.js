@@ -56,6 +56,16 @@ export const register_user = async (req, res) => {
         const password = generatePassword();
         const encrypted_password = await encryptPassword(password);
 
+        // size and formet check
+        if (req.file) {
+            if (req.file.size > 5 * 1024 * 1024) {
+                return res.status(400).json({ message: "Too large" });
+            }
+            if (!["image/jpeg", "image/png"].includes(req.file.mimetype)) {
+                return res.status(400).json({ message: "Invalid format" });
+            }
+        }
+
         // upload profile picture if provided
         let profile_url = null;
         if (req.file) {
@@ -99,12 +109,12 @@ export const register_user = async (req, res) => {
                     id: user._id,
                     name: user.name,
                     email: user.email,
-                    password: password,
+                    password: password,   //
                 },
             });
 
         }
-
+        // else
 
     } catch (error) {
         return res.status(500).json({
@@ -250,6 +260,9 @@ export const update_user = async (req, res) => {
             age,
             dob,
         };
+
+
+        // size check
 
         // upload profile picture if provided
         if (req.file) {

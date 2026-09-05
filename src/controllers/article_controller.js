@@ -41,7 +41,7 @@ export const create_article = async (req, res) => {
         if (existingArticle) {
             return res.status(409).json({
                 success: false,
-                message: "YOU HAVE ALREADY CREATED AN ARTICLE WITH THIS TITLE"
+                message: "ALREADY CREATED AN ARTICLE WITH THIS TITLE"
             });
         }
 
@@ -53,12 +53,15 @@ export const create_article = async (req, res) => {
             });
         }
 
-        // Check detailed description length
-        if (detailsDescription.trim().length < 20 || detailsDescription.trim().length > 10000) {
-            return res.status(400).json({
-                success: false,
-                message: "DETAILS DESCRIPTION MUST BE BETWEEN 20 AND 10000 CHARACTERS"
-            });
+
+        // size and formet check
+        if (banner) {
+            if (banner.size > 5 * 1024 * 1024) {
+                return res.status(400).json({ message: "Too large" });
+            }
+            if (!["image/jpeg", "image/png"].includes(banner.mimetype)) {
+                return res.status(400).json({ message: "Invalid format" });
+            }
         }
 
         // Handling Banner if provided
@@ -229,6 +232,7 @@ export const update_article = async (req, res) => {
                     });
                 }
             }
+
             updateData.title = title.trim();
         }
 
@@ -252,6 +256,17 @@ export const update_article = async (req, res) => {
                 });
             }
             updateData.detailsDescription = detailsDescription.trim();
+        }
+
+
+        // banner size and formet check
+        if (req.file) {
+            if (req.file.size > 5 * 1024 * 1024) {
+                return res.status(400).json({ message: "Too large File" });
+            }
+            if (!["image/jpeg", "image/png"].includes(req.file.mimetype)) {
+                return res.status(400).json({ message: "Invalid format" });
+            }
         }
 
         // Handle banner upload if provided
@@ -356,7 +371,7 @@ export const get_articles = async (req, res) => {
                 currentPage: page,
                 limit
             },
-            length:articles.length,
+            length: articles.length,
             data: articles,
 
         });
