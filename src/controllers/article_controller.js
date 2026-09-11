@@ -420,6 +420,7 @@ export const get_articles = async (req, res) => {
                 message: " NO ARTICLES FOUND "
             });
         }
+
         return res.status(200).json({
             success: true,
             message: "ARTICLES FETCHED SUCCESSFULLY",

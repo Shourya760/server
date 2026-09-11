@@ -13,6 +13,9 @@ class ArticleServices {
             .skip(skip)
             .limit(limit);
     }
+    async totalArticles() {
+        return await Article.countDocuments();
+    }
 
     async getByFields(data) {
         return await Article.findOne(data)
