@@ -24,16 +24,17 @@ const userSchema = new mongoose.Schema(
 			required: false,
 			trim: true,
 		},
-		dob: {
-			type: Date,
-			required: true,
-		},
 		gender: {
 			type: String,
 			required: true,
 			trim: true,
 			lowercase: true,
-			enum: ["male", "female", "other"]
+			enum: ["male", "female", "other", "prefer_not"]
+		},
+		dob: {
+			type: String,
+			required: false,
+			trim: true,
 		},
 		password: {
 			type: String,

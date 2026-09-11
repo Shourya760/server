@@ -82,20 +82,22 @@ export const create_comment = async (req, res) => {
         }
 
         // Send email
-        if (article.createdBy._id.toString() !== user_id.toString()) {
-            const email_info = commentEmail(
-                article,
-                commenter,
-                comment.trim()
-            );
-            sendEmail({
-                to: article.createdBy.email,
-                subject: email_info.subject,
-                text: email_info.text,
-                html: email_info.html,
-            }).catch((error) => {
-                console.error("Error in Email =>", error.message || error);
-            });
+        if (article.createdBy && article.createdBy._id && article.createdBy._id.toString() !== user_id.toString()) {
+            if (article.createdBy.email) {
+                const email_info = commentEmail(
+                    article,
+                    commenter,
+                    comment.trim()
+                );
+                sendEmail({
+                    to: article.createdBy.email,
+                    subject: email_info.subject,
+                    text: email_info.text,
+                    html: email_info.html,
+                }).catch((error) => {
+                    console.error("Error in Comment Email =>", error.message || error);
+                });
+            }
         }
 
         return res.status(201).json({
@@ -109,7 +111,7 @@ export const create_comment = async (req, res) => {
 
         return res.status(500).json({
             success: false,
-            message: "ERROR WHILE CREATING COMMENT => " + error.message
+            message: "ERROR WHILE CREATING COMMENT"
         });
     }
 };
@@ -141,9 +143,10 @@ export const get_comments = async (req, res) => {
         });
 
     } catch (error) {
+        console.error("Get Comments Error:", error?.message || error);
         return res.status(500).json({
             success: false,
-            message: "ERROR WHILE GETTING COMMENTS => " + error.message
+            message: "ERROR WHILE GETTING COMMENTS"
         });
     }
 };
@@ -209,9 +212,10 @@ export const update_comment = async (req, res) => {
         });
 
     } catch (error) {
+        console.error("Update Comment Error:", error?.message || error);
         return res.status(500).json({
             success: false,
-            message: "ERROR WHILE UPDATING COMMENT => " + error.message
+            message: "ERROR WHILE UPDATING COMMENT"
         });
     }
 };
@@ -268,9 +272,10 @@ export const delete_comment = async (req, res) => {
         });
 
     } catch (error) {
+        console.error("Delete Comment Error:", error?.message || error);
         return res.status(500).json({
             success: false,
-            message: "ERROR WHILE DELETING COMMENT => " + error.message
+            message: "ERROR WHILE DELETING COMMENT"
         });
     }
 };

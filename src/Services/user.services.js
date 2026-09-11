@@ -17,6 +17,9 @@ class UserServices {
             { new: true }
         );
     }
+    async allUsersEmail() {
+        return await User.find({ isDeleted: false }, "email");
+    }
 }
 
 export default new UserServices();

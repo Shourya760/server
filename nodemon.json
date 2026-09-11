@@ -1,0 +1,11 @@
+{
+  "watch": [
+    "server.js",
+    "src",
+    "config",
+    ".env"
+  ],
+  "ext": "js,json,env",
+  "legacyWatch": true,
+  "delay": 100
+}

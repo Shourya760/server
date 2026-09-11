@@ -6,120 +6,201 @@ import { sendEmail } from "../utils/sendemail.js";
 import { welcomeEmail, updateEmail } from "../emailformats/userEmails.js";
 import { uploadToCloudinary } from "../utils/cloudinaryTask.js";
 
+
 export const register_user = async (req, res) => {
     try {
-        const { name, email, phone, gender, age, dob } = req.body;
+        const { name, email, phone, gender, age } = req.body;
 
-        // All fields required
-        if (!name || !email || !phone || !gender || !age || !dob) {
+        // Basic validation
+        if (
+            !name?.trim() ||
+            !email?.trim() ||
+            !phone?.toString().trim() ||
+            !gender?.toString().trim() ||
+            age === undefined ||
+            age === null ||
+            age === ""
+        ) {
             return res.status(400).json({
                 success: false,
-                message: "ALL FIELDS REQUIRED"
+                message: "ALL FIELDS REQUIRED",
             });
         }
 
-        // Email format check
-        if (!isValidEmail(email)) {
+        // Normalize input
+        const normalizedEmail = email.trim().toLowerCase();
+        const normalizedPhone = phone.toString().trim();
+        const normalizedGender = gender.toString().trim().toLowerCase();
+
+        // Email validation
+        if (!isValidEmail(normalizedEmail)) {
             return res.status(400).json({
                 success: false,
-                message: "INVALID EMAIL FORMAT"
+                message: "INVALID EMAIL FORMAT",
             });
         }
 
-        // Email check
-        const existing_email = await UserServices.getUserByField("email", email);
-        if (existing_email) {
+        // Phone validation
+        if (!isValidIndianPhone(normalizedPhone)) {
             return res.status(400).json({
                 success: false,
-                message: "EMAIL ALREADY EXISTS"
+                message: "PHONE NUMBER IS NOT VALID",
             });
         }
 
-        // Phone check
-        const phone_check = isValidIndianPhone(phone);
-        if (!phone_check) {
+        // Gender validation
+        const allowedGenders = ["male", "female", "other", "prefer_not"];
+
+        if (!allowedGenders.includes(normalizedGender)) {
             return res.status(400).json({
                 success: false,
-                message: "PHONE NUMBER IS NOT VALID"
+                message: "GENDER MUST BE 'male', 'female', 'other', OR 'prefer_not'",
             });
         }
 
-        // Gender check
-        if (!["male", "female", "other"].includes(gender.toString().toLowerCase())) {
+        // Age validation
+        const numericAge = Number(age);
+
+        if (
+            !Number.isInteger(numericAge) ||
+            numericAge < 1 ||
+            numericAge > 120
+        ) {
             return res.status(400).json({
                 success: false,
-                message: "GENDER MUST BE 'male', 'female', OR 'other'"
+                message: "AGE MUST BE A VALID NUMBER BETWEEN 1 AND 120",
             });
         }
 
-        // Random password generation and encryption
+        // Check existing email
+        const existingEmail = await UserServices.getUserByField(
+            "email",
+            normalizedEmail
+        );
+
+        if (existingEmail) {
+            return res.status(400).json({
+                success: false,
+                message: "EMAIL ALREADY EXISTS",
+            });
+        }
+
+        // Profile image validation
+        if (req.file) {
+            const MAX_FILE_SIZE = 5 * 1024 * 1024;
+
+            if (req.file.size > MAX_FILE_SIZE) {
+                return res.status(400).json({
+                    success: false,
+                    message: "PROFILE IMAGE MUST BE LESS THAN 5 MB",
+                });
+            }
+
+            const allowedMimeTypes = [
+                "image/jpeg",
+                "image/png",
+                "image/jpg",
+            ];
+
+            if (!allowedMimeTypes.includes(req.file.mimetype)) {
+                return res.status(400).json({
+                    success: false,
+                    message: "PROFILE IMAGE MUST BE JPEG OR PNG",
+                });
+            }
+        }
+
+        // Generate password
         const password = generatePassword();
-        const encrypted_password = await encryptPassword(password);
+        const encryptedPassword = await encryptPassword(password);
 
-        // size and formet check
+        // Upload profile image
+        let profileUrl = null;
+
         if (req.file) {
-            if (req.file.size > 5 * 1024 * 1024) {
-                return res.status(400).json({ message: "Too large" });
-            }
-            if (!["image/jpeg", "image/png"].includes(req.file.mimetype)) {
-                return res.status(400).json({ message: "Invalid format" });
+            const uploadedFile = await uploadToCloudinary(req.file.buffer, "users");
+
+            profileUrl =
+                uploadedFile?.secure_url ||
+                uploadedFile?.url ||
+                null;
+
+            if (!profileUrl) {
+                return res.status(500).json({
+                    success: false,
+                    message: "PROFILE IMAGE UPLOAD FAILED",
+                });
             }
         }
 
-        // upload profile picture if provided
-        let profile_url = null;
-        if (req.file) {
-            const uploadedFile = await uploadToCloudinary(req.file.buffer);
-            profile_url = uploadedFile.secure_url || uploadedFile.url;
-        }
-
+        // Create user
         const data = {
-            name,
-            email,
-            phone,
-            gender: gender.toString().toLowerCase(),
-            age,
-            dob,
-            password: encrypted_password,
-            profile: profile_url
+            name: name.trim(),
+            email: normalizedEmail,
+            phone: normalizedPhone,
+            gender: normalizedGender,
+            age: numericAge,
+            password: encryptedPassword,
+            profile: profileUrl,
         };
 
-        // 
         const user = await UserServices.registerUser(data);
 
-
-        // Email Services
-        if (user) {
-            const email_info = welcomeEmail(user, password);
-            sendEmail({
-                to: user.email,
-                subject: email_info.subject,
-                text: email_info.text,
-                html: email_info.html,
-            }).catch((error) => {
-                console.error("Error in Email =>", error.message || error);
+        if (!user) {
+            return res.status(500).json({
+                success: false,
+                message: "USER REGISTRATION FAILED",
             });
-
-            console.error("Registred ✅");
-
-            return res.status(201).json({
-                success: true,
-                message: "User registered successfully",
-                data: {
-                    id: user._id,
-                    name: user.name,
-                    email: user.email,
-                    password: password,   //
-                },
-            });
-
         }
-        // else
 
+        // Send welcome email
+        try {
+            const emailInfo = welcomeEmail(user, password);
+
+            await sendEmail({
+                to: user.email,
+                subject: emailInfo.subject,
+                text: emailInfo.text,
+                html: emailInfo.html,
+            });
+            console.log("Password sent to Email ✅")
+        } catch (emailError) {
+
+            // Registration should still succeed if email fails.
+
+            console.error(
+                "Welcome Email Error =>",
+                emailError?.message || emailError
+            );
+        }
+
+
+        // Success response
+        console.log("User Registered ✅");
+
+        return res.status(201).json({
+            success: true,
+            message: "User registered successfully",
+            data: {
+                id: user._id,
+                name: user.name,
+                email: user.email,
+                phone: user.phone,
+                gender: user.gender,
+                age: user.age,
+                profile: user.profile,
+                temporaryPassword: password,
+            },
+        });
     } catch (error) {
+        console.error(
+            "Register User Error =>",
+            error?.message || error
+        );
+
         return res.status(500).json({
             success: false,
-            message: "ERROR WHILE CREATING USER => " + error
+            message: "ERROR WHILE CREATING USER",
         });
     }
 };
@@ -135,8 +216,10 @@ export const login_user = async (req, res) => {
             });
         }
 
+        const normalizedEmail = email.trim().toLowerCase();
+
         // Email format check
-        if (!isValidEmail(email)) {
+        if (!isValidEmail(normalizedEmail)) {
             return res.status(400).json({
                 success: false,
                 message: "INVALID EMAIL FORMAT"
@@ -144,7 +227,7 @@ export const login_user = async (req, res) => {
         }
 
         // Email check
-        const existing_email = await UserServices.getUserByField("email", email);
+        const existing_email = await UserServices.getUserByField("email", normalizedEmail);
         if (!existing_email) {
             return res.status(400).json({
                 success: false,
@@ -169,18 +252,33 @@ export const login_user = async (req, res) => {
             name: existing_email.name
         });
 
+        const userData = {
+            id: existing_email._id,
+            name: existing_email.name,
+            email: existing_email.email,
+            phone: existing_email.phone,
+            gender: existing_email.gender,
+            profile: existing_email.profile,
+        };
+
         return res.status(200).json({
             success: true,
+            status: true,
             message: "LOGIN SUCCESSFUL",
             token: token,
-            data: "Welcome " + existing_email.name
-        })
+            data: {
+                token: token,
+                user: userData,
+            },
+            user: userData,
+        });
 
     } catch (error) {
+        console.error("Login Error =>", error?.message || error);
         return res.status(500).json({
             success: false,
-            message: "ERROR WHILE LOG IN  => " + error
-        })
+            message: "ERROR WHILE LOGGING IN"
+        });
     }
 };
 
@@ -201,6 +299,7 @@ export const get_user = async (req, res) => {
         }
 
         user.password = undefined;
+        // user.id = undefined;
 
         return res.status(200).json({
             success: true,
@@ -209,9 +308,10 @@ export const get_user = async (req, res) => {
         });
 
     } catch (error) {
+        console.error("Get User Error =>", error?.message || error);
         return res.status(500).json({
             success: false,
-            message: "ERROR WHILE GETTING USER => " + error.message
+            message: "ERROR WHILE GETTING USER"
         });
     }
 };
@@ -245,10 +345,11 @@ export const update_user = async (req, res) => {
         }
 
         // Gender check if provided
-        if (gender !== undefined && !["male", "female", "other"].includes(gender.toString().toLowerCase())) {
+        const allowedGenders = ["male", "female", "other", "prefer_not"];
+        if (gender !== undefined && !allowedGenders.includes(gender.toString().toLowerCase())) {
             return res.status(400).json({
                 success: false,
-                message: "GENDER MUST BE 'male', 'female', OR 'other'"
+                message: "GENDER MUST BE 'male', 'female', 'other', OR 'prefer_not'"
             });
         }
 
@@ -266,7 +367,7 @@ export const update_user = async (req, res) => {
 
         // upload profile picture if provided
         if (req.file) {
-            const uploadedFile = await uploadToCloudinary(req.file.buffer);
+            const uploadedFile = await uploadToCloudinary(req.file.buffer, "users");
             data.profile = uploadedFile.secure_url || uploadedFile.url;
         }
 
@@ -313,9 +414,10 @@ export const update_user = async (req, res) => {
         }
 
     } catch (error) {
+        console.error("Update User Error =>", error?.message || error);
         return res.status(500).json({
             success: false,
-            message: "ERROR WHILE UPDATING USER => " + error
+            message: "ERROR WHILE UPDATING USER"
         });
     }
 };

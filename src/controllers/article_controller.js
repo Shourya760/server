@@ -2,14 +2,18 @@ import mongoose from "mongoose";
 import articlesServices from "../Services/articles.services.js";
 import { uploadToCloudinary } from "../utils/cloudinaryTask.js";
 import commentServices from "../Services/comment.services.js";
+import userServices from "../Services/user.services.js";
+import { newArticleEmail } from "../emailformats/articleEmail.js";
+import sendEmail from "../utils/sendemail.js";
+
 
 export const create_article = async (req, res) => {
     try {
         const user_id = req.curr_user.id;
-        const { title, shortDescription, detailsDescription } = req.body;
+        const { title, shortDescription, detailsDescription, image_url } = req.body;
         const banner = req.file;
 
-        // Check all fields
+        //  Validate required fields
         if (!title || !shortDescription || !detailsDescription) {
             return res.status(400).json({
                 success: false,
@@ -17,7 +21,7 @@ export const create_article = async (req, res) => {
             });
         }
 
-        // Validate User ID
+        // Validate user ID
         if (!mongoose.isValidObjectId(user_id)) {
             return res.status(400).json({
                 success: false,
@@ -25,17 +29,19 @@ export const create_article = async (req, res) => {
             });
         }
 
-        // Check title length
-        if (title.trim().length < 5 || title.trim().length > 150) {
+        //  Validate title
+        const trimmedTitle = title.trim();
+
+        if (trimmedTitle.length < 5 || trimmedTitle.length > 150) {
             return res.status(400).json({
                 success: false,
                 message: "TITLE MUST BE BETWEEN 5 AND 150 CHARACTERS"
             });
         }
 
-        // Check duplicate article
+        //  Check duplicate article
         const existingArticle = await articlesServices.getByFields({
-            title: title.trim(),
+            title: trimmedTitle,
             createdBy: user_id
         });
         if (existingArticle) {
@@ -45,59 +51,105 @@ export const create_article = async (req, res) => {
             });
         }
 
-        // Check short description length
-        if (shortDescription.trim().length < 10 || shortDescription.trim().length > 500) {
+        //  Validate short description
+        const trimmedShortDescription = shortDescription.trim();
+
+        if (trimmedShortDescription.length < 10 || trimmedShortDescription.length > 500
+        ) {
             return res.status(400).json({
                 success: false,
-                message: "SHORT DESCRIPTION CANNOT EXCEED 500 CHARACTERS"
+                message: "SHORT DESCRIPTION MUST BE BETWEEN 10 AND 500 CHARACTERS"
             });
         }
 
-
-        // size and formet check
+        //  Validate banner
         if (banner) {
             if (banner.size > 5 * 1024 * 1024) {
-                return res.status(400).json({ message: "Too large" });
+                return res.status(400).json({
+                    success: false,
+                    message: "BANNER TOO LARGE. MAXIMUM SIZE IS 5MB"
+                });
             }
             if (!["image/jpeg", "image/png"].includes(banner.mimetype)) {
-                return res.status(400).json({ message: "Invalid format" });
+                return res.status(400).json({
+                    success: false,
+                    message: "INVALID BANNER FORMAT. ONLY JPEG AND PNG ARE ALLOWED"
+                });
             }
         }
 
-        // Handling Banner if provided
+        // Upload banner
         let banner_url = null;
-        if (banner) {
-            const uploadedFile = await uploadToCloudinary(banner.buffer);
+        if (image_url) {
+            banner_url = image_url
+        } else if (banner) {
+            const uploadedFile = await uploadToCloudinary(banner.buffer, "articles");
             banner_url = uploadedFile.secure_url || uploadedFile.url;
         }
 
+        // Prepare article data
         const data = {
-            title: title.trim(),
-            shortDescription: shortDescription.trim(),
+            title: trimmedTitle,
+            shortDescription: trimmedShortDescription,
             detailsDescription: detailsDescription.trim(),
             banner: banner_url,
             createdBy: user_id
         };
 
-        // Adding to DB
+        // Create article
         const response = await articlesServices.createArticle(data);
 
-        return res.status(201).json({
+        // Return response immediately so frontend doesn't hang or timeout
+        res.status(201).json({
             success: true,
             message: "ARTICLE CREATED ✅",
-            data: response
+            data: response,
         });
+
+        // Send email notifications asynchronously in background
+        (async () => {
+            try {
+                const users = await userServices.allUsersEmail();
+                if (users && users.length > 0) {
+                    const email_info = newArticleEmail(response);
+                    const emailResults = await Promise.allSettled(
+                        users.map((user) =>
+                            sendEmail({
+                                to: user.email,
+                                subject: email_info.subject,
+                                text: email_info.text,
+                                html: email_info.html,
+                            })
+                        )
+                    );
+
+                    const successfulEmails = emailResults.filter(
+                        (result) => result.status === "fulfilled"
+                    ).length;
+                    const failedEmails = emailResults.filter(
+                        (result) => result.status === "rejected"
+                    ).length;
+
+                    console.log(`Article notification emails: ${successfulEmails} sent, ${failedEmails} failed.`);
+                }
+            } catch (emailErr) {
+                console.error("Background article notification error:", emailErr?.message || emailErr);
+            }
+        })();
+
     } catch (error) {
+        console.error("Create article error:", error);
+
         return res.status(500).json({
             success: false,
-            message: "ERROR WHILE CREATING ARTICLE => " + error.message
+            message: "ERROR WHILE CREATING ARTICLE"
         });
     }
 };
 
 export const article_details = async (req, res) => {
     try {
-        const id = req.query.id || req.query.article_id;
+        const id = req.body.article_id;
 
         // Check ID presence
         if (!id) {
@@ -115,7 +167,8 @@ export const article_details = async (req, res) => {
             });
         }
 
-        const article_details = await articlesServices.getByFields({ _id: id });
+        const article_details = await articlesServices.getArticleById(id);
+
         if (!article_details) {
             return res.status(404).json({
                 success: false,
@@ -129,9 +182,10 @@ export const article_details = async (req, res) => {
             data: article_details
         });
     } catch (error) {
+        console.error("Get Article Details Error:", error?.message || error);
         return res.status(500).json({
             success: false,
-            message: "ERROR WHILE GETTING ARTICLE DETAILS => " + error.message
+            message: "ERROR WHILE GETTING ARTICLE DETAILS"
         });
     }
 };
@@ -167,9 +221,10 @@ export const my_articles = async (req, res) => {
         });
 
     } catch (error) {
+        console.error("Get My Articles Error:", error?.message || error);
         return res.status(500).json({
             success: false,
-            message: "ERROR WHILE GETTING YOUR ARTICLES => " + error.message
+            message: "ERROR WHILE GETTING YOUR ARTICLES"
         });
     }
 };
@@ -258,7 +313,6 @@ export const update_article = async (req, res) => {
             updateData.detailsDescription = detailsDescription.trim();
         }
 
-
         // banner size and formet check
         if (req.file) {
             if (req.file.size > 5 * 1024 * 1024) {
@@ -271,7 +325,7 @@ export const update_article = async (req, res) => {
 
         // Handle banner upload if provided
         if (req.file) {
-            const uploadedFile = await uploadToCloudinary(req.file.buffer);
+            const uploadedFile = await uploadToCloudinary(req.file.buffer, "articles");
             updateData.banner = uploadedFile.secure_url || uploadedFile.url;
         }
 
@@ -288,9 +342,10 @@ export const update_article = async (req, res) => {
         });
 
     } catch (error) {
+        console.error("Update Article Error:", error?.message || error);
         return res.status(500).json({
             success: false,
-            message: "ERROR WHILE UPDATING ARTICLE => " + error.message
+            message: "ERROR WHILE UPDATING ARTICLE"
         });
     }
 };
@@ -343,9 +398,10 @@ export const delete_article = async (req, res) => {
         });
 
     } catch (error) {
+        console.error("Delete Article Error:", error?.message || error);
         return res.status(500).json({
             success: false,
-            message: "ERROR WHILE DELETING ARTICLE => " + error.message
+            message: "ERROR WHILE DELETING ARTICLE"
         });
     }
 };
@@ -353,7 +409,7 @@ export const delete_article = async (req, res) => {
 export const get_articles = async (req, res) => {
     try {
         const page = Number(req.query.page) || 1;
-        const limit = Number(req.query.limit) || 10;
+        const limit = Number(req.query.limit) || 10;   //change according to frountend
 
         const skip = (page - 1) * limit;
 
@@ -376,9 +432,10 @@ export const get_articles = async (req, res) => {
 
         });
     } catch (error) {
+        console.error("Get Articles Error:", error?.message || error);
         return res.status(500).json({
             success: false,
-            message: "ERROR WHILE GETTING ARTICLES => " + error.message
+            message: "ERROR WHILE GETTING ARTICLES"
         });
     }
 };

@@ -8,6 +8,7 @@ class ArticleServices {
 
     async getArticles(skip, limit) {
         return await Article.find()
+            .populate('createdBy', 'name email profile')
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(limit);
@@ -17,6 +18,18 @@ class ArticleServices {
         return await Article.findOne(data)
             .populate('createdBy', 'name email profile')
             .select('-comments')
+    }
+
+    async getArticleById(id) {
+        return await Article.findById(id)
+            .populate("createdBy", "name email profile")
+            .populate({
+                path: 'comments',
+                populate: {
+                    path: 'createdBy',
+                    select: 'name email profile'
+                }
+            });
     }
 
     async getMyArticles(userId) {
@@ -58,6 +71,8 @@ class ArticleServices {
             }
         );
     }
+
+
 }
 
 export default new ArticleServices;
