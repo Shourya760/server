@@ -10,14 +10,35 @@ import sendEmail from "../utils/sendemail.js";
 export const create_article = async (req, res) => {
     try {
         const user_id = req.curr_user.id;
-        const { title, shortDescription, detailsDescription, image_url } = req.body;
+        const { title, shortDescription, detailsDescription, tag, image_url } = req.body;
         const banner = req.file;
 
         //  Validate required fields
-        if (!title || !shortDescription || !detailsDescription) {
+        if (!title || !shortDescription || !detailsDescription || !tag) {
             return res.status(400).json({
                 success: false,
                 message: "ALL FIELDS REQUIRED"
+            });
+        }
+
+        // Validate tag
+        const validTags = [
+            "technology",
+            "code",
+            "health",
+            "finance",
+            "education",
+            "lifestyle",
+            "entertainment",
+            "sports",
+            "travel",
+            "food",
+            "business"
+        ];
+        if (typeof tag !== "string" || !validTags.includes(tag.trim().toLowerCase())) {
+            return res.status(400).json({
+                success: false,
+                message: "INVALID TAG"
             });
         }
 
@@ -31,7 +52,6 @@ export const create_article = async (req, res) => {
 
         //  Validate title
         const trimmedTitle = title.trim();
-
         if (trimmedTitle.length < 5 || trimmedTitle.length > 150) {
             return res.status(400).json({
                 success: false,
@@ -93,6 +113,7 @@ export const create_article = async (req, res) => {
             shortDescription: trimmedShortDescription,
             detailsDescription: detailsDescription.trim(),
             banner: banner_url,
+            tag: tag.trim(),
             createdBy: user_id
         };
 
@@ -139,7 +160,6 @@ export const create_article = async (req, res) => {
 
     } catch (error) {
         console.error("Create article error:", error);
-
         return res.status(500).json({
             success: false,
             message: "ERROR WHILE CREATING ARTICLE"
@@ -149,7 +169,7 @@ export const create_article = async (req, res) => {
 
 export const article_details = async (req, res) => {
     try {
-        const id = req.body.article_id;
+        const { id } = req.query;
 
         // Check ID presence
         if (!id) {
@@ -231,11 +251,18 @@ export const my_articles = async (req, res) => {
 
 export const update_article = async (req, res) => {
     try {
-        const user_id = req.curr_user.id;
-        const article_id = req.query.article_id || req.query.id;
-        const { title, shortDescription, detailsDescription } = req.body;
 
-        // Check ID presence
+        //Check authenticated user
+        const user_id = req.curr_user?.id;
+        if (!user_id) {
+            return res.status(401).json({
+                success: false,
+                message: "UNAUTHORIZED"
+            });
+        }
+
+        // Get article ID
+        const article_id = req.query.article_id || req.query.id;
         if (!article_id) {
             return res.status(400).json({
                 success: false,
@@ -243,7 +270,7 @@ export const update_article = async (req, res) => {
             });
         }
 
-        // Validate Article ID
+        //Validate article ID
         if (!mongoose.isValidObjectId(article_id)) {
             return res.status(400).json({
                 success: false,
@@ -251,7 +278,17 @@ export const update_article = async (req, res) => {
             });
         }
 
-        // Check if article exists and belongs to user
+
+        // Get request body
+        const {
+            title,
+            shortDescription,
+            detailsDescription,
+            tag
+        } = req.body;
+
+
+        // Find article owned by user
         const article = await articlesServices.getByFields({
             _id: article_id,
             createdBy: user_id
@@ -263,9 +300,9 @@ export const update_article = async (req, res) => {
             });
         }
 
-        const updateData = {};
 
-        // Check title if provided
+        // Prepare update object
+        const updateData = {};
         if (title !== undefined) {
             if (typeof title !== "string" || title.trim().length < 5 || title.trim().length > 150) {
                 return res.status(400).json({
@@ -274,81 +311,167 @@ export const update_article = async (req, res) => {
                 });
             }
 
-            // Check duplicate article only if title is changed
-            if (title.trim() !== article.title) {
+            const cleanTitle = title.trim();
+            // Only check duplicate if title actually changed
+            if (cleanTitle !== article.title) {
                 const existingArticle = await articlesServices.getByFields({
-                    title: title.trim(),
+                    title: cleanTitle,
                     createdBy: user_id
                 });
-                if (existingArticle && existingArticle._id.toString() !== article_id.toString()) {
+
+                if (existingArticle && existingArticle._id.toString() !== article._id.toString()
+                ) {
                     return res.status(409).json({
                         success: false,
-                        message: "YOU HAVE ALREADY CREATED AN ARTICLE WITH THIS TITLE"
+                        message:
+                            "YOU HAVE ALREADY CREATED AN ARTICLE WITH THIS TITLE"
+                    });
+                }
+            }
+            updateData.title = cleanTitle;
+        }
+
+        //  Validate short description
+        if (shortDescription !== undefined) {
+            if (
+                typeof shortDescription !== "string" ||
+                shortDescription.trim().length < 10 ||
+                shortDescription.trim().length > 500
+            ) {
+                return res.status(400).json({
+                    success: false,
+                    message:
+                        "SHORT DESCRIPTION MUST BE BETWEEN 10 AND 500 CHARACTERS"
+                });
+            }
+
+            updateData.shortDescription = shortDescription.trim();
+            updateData.detailsDescription = detailsDescription.trim();
+
+            // Validate tag ONLY if provided
+
+            const validTags = [
+                "technology",
+                "code",
+                "health",
+                "finance",
+                "education",
+                "lifestyle",
+                "entertainment",
+                "sports",
+                "travel",
+                "food",
+                "business"
+            ];
+            if (tag !== undefined) {
+                if (typeof tag !== "string") {
+                    return res.status(400).json({
+                        success: false,
+                        message: "INVALID TAG"
+                    });
+                }
+
+                const cleanTag = tag.trim().toLowerCase();
+                if (!validTags.includes(cleanTag)) {
+                    return res.status(400).json({
+                        success: false,
+                        message: "INVALID TAG"
+                    });
+                }
+                updateData.tag = cleanTag;
+            }
+
+
+            //  Validate banner if provided
+            if (req.file) {
+                // File size
+                if (req.file.size > 5 * 1024 * 1024) {
+                    return res.status(400).json({
+                        success: false,
+                        message: "BANNER FILE MUST NOT EXCEED 5 MB"
+                    });
+                }
+
+                // File format
+                const allowedMimeTypes = [
+                    "image/jpeg",
+                    "image/png",
+                    "image/webp"
+                ];
+
+                if (!allowedMimeTypes.includes(req.file.mimetype)) {
+                    return res.status(400).json({
+                        success: false,
+                        message:
+                            "INVALID BANNER FORMAT. ONLY JPEG, PNG OR WEBP ARE ALLOWED"
                     });
                 }
             }
 
-            updateData.title = title.trim();
-        }
+            // Upload banner if provided
+            if (req.file) {
+                const uploadedFile = await uploadToCloudinary(
+                    req.file.buffer,
+                    "articles"
+                );
+                if (!uploadedFile) {
+                    return res.status(500).json({
+                        success: false,
+                        message: "BANNER UPLOAD FAILED"
+                    });
+                }
 
-        // Check short description if provided
-        if (shortDescription !== undefined) {
-            if (typeof shortDescription !== "string" || shortDescription.trim().length < 10 || shortDescription.trim().length > 500) {
+                updateData.banner =
+                    uploadedFile.secure_url || uploadedFile.url;
+
+                if (!updateData.banner) {
+                    return res.status(500).json({
+                        success: false,
+                        message: "BANNER URL NOT FOUND AFTER UPLOAD"
+                    });
+                }
+            }
+
+            //  Check if anything was provided
+            if (Object.keys(updateData).length === 0) {
                 return res.status(400).json({
                     success: false,
-                    message: "SHORT DESCRIPTION CANNOT EXCEED 500 CHARACTERS"
+                    message: "NOTHING TO UPDATE"
                 });
             }
-            updateData.shortDescription = shortDescription.trim();
-        }
 
-        // Check detailed description if provided
-        if (detailsDescription !== undefined) {
-            if (typeof detailsDescription !== "string" || detailsDescription.trim().length < 20 || detailsDescription.trim().length > 10000) {
-                return res.status(400).json({
+            //  Update article
+            const updatedArticle = await articlesServices.updateArticle(
+                {
+                    _id: article._id,
+                    createdBy: user_id
+                },
+                updateData
+            );
+            if (!updatedArticle) {
+                return res.status(500).json({
                     success: false,
-                    message: "DETAILS DESCRIPTION MUST BE BETWEEN 20 AND 10000 CHARACTERS"
+                    message: "ARTICLE UPDATE FAILED"
                 });
             }
-            updateData.detailsDescription = detailsDescription.trim();
+
+            return res.status(200).json({
+                success: true,
+                message: "ARTICLE UPDATED ✅",
+                data: updatedArticle
+            });
+
         }
-
-        // banner size and formet check
-        if (req.file) {
-            if (req.file.size > 5 * 1024 * 1024) {
-                return res.status(400).json({ message: "Too large File" });
-            }
-            if (!["image/jpeg", "image/png"].includes(req.file.mimetype)) {
-                return res.status(400).json({ message: "Invalid format" });
-            }
-        }
-
-        // Handle banner upload if provided
-        if (req.file) {
-            const uploadedFile = await uploadToCloudinary(req.file.buffer, "articles");
-            updateData.banner = uploadedFile.secure_url || uploadedFile.url;
-        }
-
-        // Updating Article
-        const updatedArticle = await articlesServices.updateArticle(
-            { _id: article_id, createdBy: user_id },
-            updateData
-        );
-
-        return res.status(200).json({
-            success: true,
-            message: "ARTICLE UPDATED ✅",
-            data: updatedArticle
-        });
-
     } catch (error) {
+
         console.error("Update Article Error:", error?.message || error);
         return res.status(500).json({
             success: false,
             message: "ERROR WHILE UPDATING ARTICLE"
         });
     }
-};
+}
+
 
 export const delete_article = async (req, res) => {
     try {

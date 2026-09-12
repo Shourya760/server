@@ -8,7 +8,7 @@ class ArticleServices {
 
     async getArticles(skip, limit) {
         return await Article.find()
-            .populate('createdBy', 'name email profile')
+            .populate('createdBy', 'name email profile age')
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(limit);
@@ -19,13 +19,13 @@ class ArticleServices {
 
     async getByFields(data) {
         return await Article.findOne(data)
-            .populate('createdBy', 'name email profile')
+            .populate('createdBy', 'name email profile age')
             .select('-comments')
     }
 
     async getArticleById(id) {
         return await Article.findById(id)
-            .populate("createdBy", "name email profile")
+            .populate("createdBy", "name email profile age")
             .populate({
                 path: 'comments',
                 populate: {

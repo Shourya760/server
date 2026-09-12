@@ -8,8 +8,7 @@ import { commentEmail } from "../emailformats/commentEmail.js";
 export const create_comment = async (req, res) => {
     try {
         const user_id = req.curr_user.id;
-        const article_id = req.query.article_id || req.query.id;
-        const { comment } = req.body;
+        const { article_id, comment } = req.body;
 
         // Required fields
         if (!article_id || !comment?.trim()) {

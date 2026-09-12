@@ -21,6 +21,11 @@ const articleSchema = new mongoose.Schema(
             type: String,
             required: false,
         },
+        tag: {
+            type: String,
+            required: true,
+            trim: true,
+        },
         createdBy: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "User",
