@@ -88,20 +88,17 @@ export const register_user = async (req, res) => {
         // Profile image validation
         if (req.file) {
             const MAX_FILE_SIZE = 5 * 1024 * 1024;
-
             if (req.file.size > MAX_FILE_SIZE) {
                 return res.status(400).json({
                     success: false,
                     message: "PROFILE IMAGE MUST BE LESS THAN 5 MB",
                 });
             }
-
             const allowedMimeTypes = [
                 "image/jpeg",
                 "image/png",
                 "image/jpg",
             ];
-
             if (!allowedMimeTypes.includes(req.file.mimetype)) {
                 return res.status(400).json({
                     success: false,
@@ -289,7 +286,7 @@ export const get_user = async (req, res) => {
         console.log(user_id)
 
         // Get user
-        const user = await UserServices.getUserByField("_id", user_id);
+        const user = await UserServices.getUserById(user_id);
 
         if (!user) {
             return res.status(404).json({
@@ -324,7 +321,7 @@ export const update_user = async (req, res) => {
             phone,
             gender,
             age,
-            dob,
+            bio,
         } = req.body;
 
         // Check if user exists
@@ -336,47 +333,95 @@ export const update_user = async (req, res) => {
             });
         }
 
+        const data = {};
+
+        // Name check if provided
+        if (name !== undefined) {
+            const trimmedName = name.toString().trim();
+            if (!trimmedName) {
+                return res.status(400).json({
+                    success: false,
+                    message: "NAME CANNOT BE EMPTY"
+                });
+            }
+            data.name = trimmedName;
+        }
+
         // Phone check if provided
-        if (phone !== undefined && !isValidIndianPhone(phone)) {
-            return res.status(400).json({
-                success: false,
-                message: "PHONE NUMBER IS NOT VALID"
-            });
+        if (phone !== undefined) {
+            const normalizedPhone = phone.toString().trim();
+            if (!isValidIndianPhone(normalizedPhone)) {
+                return res.status(400).json({
+                    success: false,
+                    message: "PHONE NUMBER IS NOT VALID"
+                });
+            }
+            data.phone = normalizedPhone;
         }
 
         // Gender check if provided
-        const allowedGenders = ["male", "female", "other", "prefer_not"];
-        if (gender !== undefined && !allowedGenders.includes(gender.toString().toLowerCase())) {
-            return res.status(400).json({
-                success: false,
-                message: "GENDER MUST BE 'male', 'female', 'other', OR 'prefer_not'"
-            });
-        }
-
-        // Data to update
-        const data = {
-            name,
-            phone,
-            gender: gender !== undefined ? gender.toString().toLowerCase() : undefined,
-            age,
-            dob,
-        };
-
-
-        // size check
-
-        // upload profile picture if provided
-        if (req.file) {
-            const uploadedFile = await uploadToCloudinary(req.file.buffer, "users");
-            data.profile = uploadedFile.secure_url || uploadedFile.url;
-        }
-
-        // Remove undefined fields
-        Object.keys(data).forEach((key) => {
-            if (data[key] === undefined) {
-                delete data[key];
+        if (gender !== undefined) {
+            const normalizedGender = gender.toString().trim().toLowerCase();
+            const allowedGenders = ["male", "female", "other"];
+            if (!allowedGenders.includes(normalizedGender)) {
+                return res.status(400).json({
+                    success: false,
+                    message: "GENDER MUST BE 'male', 'female' or 'other'"
+                });
             }
-        });
+            data.gender = normalizedGender;
+        }
+
+        // Age check if provided
+        if (age !== undefined && age !== null && age !== "") {
+            const numericAge = Number(age);
+            if (!Number.isInteger(numericAge) || numericAge < 1 || numericAge > 120) {
+                return res.status(400).json({
+                    success: false,
+                    message: "AGE MUST BE A VALID NUMBER BETWEEN 1 AND 120"
+                });
+            }
+            data.age = numericAge;
+        }
+
+        // Bio check if provided
+        if (bio !== undefined) {
+            data.bio = bio.toString().trim();
+        }
+
+        // Profile image validation & upload
+        if (req.file) {
+            const MAX_FILE_SIZE = 5 * 1024 * 1024;
+
+            if (req.file.size > MAX_FILE_SIZE) {
+                return res.status(400).json({
+                    success: false,
+                    message: "PROFILE IMAGE MUST BE LESS THAN 5 MB",
+                });
+            }
+            const allowedMimeTypes = [
+                "image/jpeg",
+                "image/png",
+                "image/jpg",
+                "image/webp",
+            ];
+            if (!allowedMimeTypes.includes(req.file.mimetype)) {
+                return res.status(400).json({
+                    success: false,
+                    message: "PROFILE IMAGE MUST BE JPEG, PNG, OR WEBP",
+                });
+            }
+
+            const uploadedFile = await uploadToCloudinary(req.file.buffer, "users");
+            const profileUrl = uploadedFile?.secure_url || uploadedFile?.url;
+            if (!profileUrl) {
+                return res.status(500).json({
+                    success: false,
+                    message: "PROFILE IMAGE UPLOAD FAILED",
+                });
+            }
+            data.profile = profileUrl;
+        }
 
         // Update user
         const updated_user = await UserServices.updateUser(
@@ -384,34 +429,37 @@ export const update_user = async (req, res) => {
             data
         );
 
+        if (!updated_user) {
+            return res.status(404).json({
+                success: false,
+                message: "USER NOT FOUND"
+            });
+        }
+
         // Remove password from response
         updated_user.password = undefined;
 
-        if (updated_user) {
-            try {
-                const emailInfo = updateEmail(updated_user);
-                sendEmail({
-                    to: updated_user.email,
-                    subject: emailInfo.subject,
-                    text: emailInfo.text,
-                    html: emailInfo.html,
-                }).catch((error) => {
-                    console.error("Error in Email =>", error.message || error);
-                });
-            } catch (error) {
-                console.error("Error generating update email =>", error.message || error);
-            }
-
-
-            console.error("Updated  ✅");
-
-
-            return res.status(200).json({
-                success: true,
-                message: "User Updated successfully",
-                data: updated_user
+        try {
+            const emailInfo = updateEmail(updated_user);
+            sendEmail({
+                to: updated_user.email,
+                subject: emailInfo.subject,
+                text: emailInfo.text,
+                html: emailInfo.html,
+            }).catch((error) => {
+                console.error("Error in Email =>", error.message || error);
             });
+        } catch (error) {
+            console.error("Error generating update email =>", error.message || error);
         }
+
+        console.log("User Updated Successfully ✅");
+
+        return res.status(200).json({
+            success: true,
+            message: "User Updated successfully",
+            data: updated_user
+        });
 
     } catch (error) {
         console.error("Update User Error =>", error?.message || error);

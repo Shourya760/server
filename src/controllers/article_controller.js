@@ -476,7 +476,7 @@ export const update_article = async (req, res) => {
 export const delete_article = async (req, res) => {
     try {
         const user_id = req.curr_user.id;
-        const article_id = req.query.article_id || req.query.id;
+        const article_id = req.body.id;
 
         // Check ID presence
         if (!article_id) {

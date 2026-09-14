@@ -31,10 +31,11 @@ const userSchema = new mongoose.Schema(
 			lowercase: true,
 			enum: ["male", "female", "other", "prefer_not"]
 		},
-		dob: {
+		bio: {
 			type: String,
 			required: false,
 			trim: true,
+			default: "",
 		},
 		password: {
 			type: String,

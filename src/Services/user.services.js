@@ -10,6 +10,13 @@ class UserServices {
             isDeleted: false
         });
     }
+
+    async getUserById(id) {
+        return await User.findById(id, {
+            isDeleted: false
+        })
+    }
+
     async updateUser(id, data) {
         return await User.findByIdAndUpdate(
             id,
@@ -18,8 +25,11 @@ class UserServices {
         );
     }
     async allUsersEmail() {
-        return await User.find({ isDeleted: false }, "email");
+        return await User.find({
+            isDeleted: false
+        }, "email");
     }
+
 }
 
 export default new UserServices();

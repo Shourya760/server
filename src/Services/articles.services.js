@@ -20,7 +20,6 @@ class ArticleServices {
     async getByFields(data) {
         return await Article.findOne(data)
             .populate('createdBy', 'name email profile age')
-            .select('-comments')
     }
 
     async getArticleById(id) {
