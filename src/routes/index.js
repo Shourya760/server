@@ -7,8 +7,6 @@ const registerRoutes = (app) => {
   app.use("/api", userRoutes);
   app.use("/api", articleRoutes);
   app.use("/api", commentRoutes);
-
-
 };
 
 export default registerRoutes;

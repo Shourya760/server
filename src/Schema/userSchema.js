@@ -29,7 +29,7 @@ const userSchema = new mongoose.Schema(
 			required: true,
 			trim: true,
 			lowercase: true,
-			enum: ["male", "female", "other", "prefer_not"]
+			enum: ["male", "female", "other"]
 		},
 		bio: {
 			type: String,

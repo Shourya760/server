@@ -13,7 +13,6 @@ const upload = multer({
 
 router.get("/get_articles", get_articles);
 router.get("/article_details", article_details);
-
 router.post("/create_article", authenticate, upload.single("banner"), create_article);
 router.get("/my_articles", authenticate, my_articles);
 router.put("/update_article", authenticate, upload.single("banner"), update_article);

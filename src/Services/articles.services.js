@@ -33,7 +33,6 @@ class ArticleServices {
                 }
             });
     }
-
     async getMyArticles(userId) {
         return await Article.find({ createdBy: userId })
             .select('-comments -createdBy');
@@ -68,9 +67,7 @@ class ArticleServices {
                     comments: comment_id
                 }
             },
-            {
-                new: true
-            }
+            { new: true }
         );
     }
 
